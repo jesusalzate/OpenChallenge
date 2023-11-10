@@ -8,6 +8,9 @@ from evalutils.validators import (
     UniquePathIndicesValidator,
     UniqueImagesValidator,
 )
+from monai import transforms, networks
+import torch
+from torch.nn.functional import softmax
 
 
 class Prostatecancerriskprediction(ClassificationAlgorithm):
@@ -26,41 +29,73 @@ class Prostatecancerriskprediction(ClassificationAlgorithm):
         self.image_input_path = list(Path(self.image_input_dir).glob("*.mha"))[0]
 
         # load clinical information
-        with open("/input/clinical-information-prostate-mri.json") as fp:
+        # dictionary with patient_age and psa information
+        with open("/input/psa-and-age.json") as fp:
             self.clinical_info = json.load(fp)
 
         # path to output files
         self.risk_score_output_file = Path("/output/prostate-cancer-risk-score.json")
-        self.risk_score_likelihood_output_file = Path("/output/prostate-cancer-risk-score-likelihood.json")
-    
+        self.risk_score_likelihood_output_file = Path(
+            "/output/prostate-cancer-risk-score-likelihood.json"
+        )
+
     def predict(self):
         """
         Your algorithm goes here
-        """        
-        
+        """
+
         # read image
-        image = sitk.ReadImage(str(self.image_input_path))
+        # image = sitk.ReadImage(str(self.image_input_path))
         clinical_info = self.clinical_info
-        print('Clinical info: ')
+        print("Clinical info: ")
         print(clinical_info)
 
         # TODO: Add your inference code here
 
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        print("Using device: ", device)
+        transform = transforms.Compose(
+            [
+                transforms.LoadImage(image_only=True),
+                transforms.EnsureChannelFirst(channel_dim=None),
+                transforms.Resize(
+                    spatial_size=(256, 256, 30),
+                    mode=("trilinear"),
+                ),
+                transforms.ScaleIntensity(minv=0.0, maxv=1.0),
+                transforms.NormalizeIntensity(),
+            ]
+        )
+        image = transform(str(self.image_input_path))
+        image = image.unsqueeze(0)
+        model = networks.nets.EfficientNetBN(
+            model_name="efficientnet-b7",
+            pretrained=False,
+            progress=False,
+            spatial_dims=3,
+            in_channels=1,
+            num_classes=2,
+        )
+        model.load_state_dict(torch.load("model_best_weights.pth", map_location=device))
+        model.to(device)
+        image = image.to(device)
+        risk_score_likelihood = softmax(model(image), dim=1)[0][1].item()
         # our code generates a random probability
-        risk_score_likelihood = random.random()
+        print(image.shape)
+        # risk_score_likelihood = random.random()
         if risk_score_likelihood > 0.5:
-            risk_score = 'High'
+            risk_score = "High"
         else:
-            risk_score = 'Low'
-        print('Risk score: ', risk_score)
-        print('Risk score likelihood: ', risk_score_likelihood)
+            risk_score = "Low"
+        print("Risk score: ", risk_score)
+        print("Risk score likelihood: ", risk_score_likelihood)
 
         # save case-level class
-        with open(str(self.risk_score_output_file), 'w') as f:
+        with open(str(self.risk_score_output_file), "w") as f:
             json.dump(risk_score, f)
 
         # save case-level likelihood
-        with open(str(self.risk_score_likelihood_output_file), 'w') as f:
+        with open(str(self.risk_score_likelihood_output_file), "w") as f:
             json.dump(float(risk_score_likelihood), f)
 
 
