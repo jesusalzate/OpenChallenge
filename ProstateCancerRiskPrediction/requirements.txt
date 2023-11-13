@@ -5,4 +5,4 @@
 #    pip-compile
 #
 
-monai==1.2.0
+monai[itk]==1.1.0

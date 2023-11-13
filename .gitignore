@@ -108,3 +108,4 @@ ENV/
 .idea/
 ProstateCancerRiskPrediction/model_best_weights.pth
 ProstateCancerRiskPrediction/chai_pro.tar.xz
+ProstateCancerRiskPrediction/chaimeleon.tar.xz

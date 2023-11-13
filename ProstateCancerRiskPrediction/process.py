@@ -1,4 +1,4 @@
-import SimpleITK as sitk
+# import SimpleITK as sitk
 from pathlib import Path
 import json
 import random
@@ -100,4 +100,5 @@ class Prostatecancerriskprediction(ClassificationAlgorithm):
 
 
 if __name__ == "__main__":
+    print(torch.__version__)
     Prostatecancerriskprediction().predict()
