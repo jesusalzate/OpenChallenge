@@ -11,6 +11,8 @@ from evalutils.validators import (
 from monai import transforms, networks
 import torch
 from torch.nn.functional import softmax
+from EfficientNetMultimodal import EfficientNetMultimodal
+from bimcv_aikit.models.classification import SwinViTMultimodal_v3
 
 
 class Prostatecancerriskprediction(ClassificationAlgorithm):
@@ -59,7 +61,7 @@ class Prostatecancerriskprediction(ClassificationAlgorithm):
                 transforms.LoadImage(image_only=True),
                 transforms.EnsureChannelFirst(channel_dim=None),
                 transforms.Resize(
-                    spatial_size=(256, 256, 30),
+                    spatial_size=(128, 128, 32),
                     mode=("trilinear"),
                 ),
                 transforms.ScaleIntensity(minv=0.0, maxv=1.0),
@@ -68,18 +70,21 @@ class Prostatecancerriskprediction(ClassificationAlgorithm):
         )
         image = transform(str(self.image_input_path))
         image = image.unsqueeze(0)
-        model = networks.nets.EfficientNetBN(
-            model_name="efficientnet-b7",
-            pretrained=False,
-            progress=False,
-            spatial_dims=3,
+        model = SwinViTMultimodal_v3(
+            n_classes=2,
+            img_size=(128, 128, 32),
             in_channels=1,
-            num_classes=2,
+            in_num_features=2,
         )
-        model.load_state_dict(torch.load("model_best_weights.pth", map_location=device))
+        model.load_state_dict(torch.load("model_best_state.pth", map_location=device))
         model.to(device)
         image = image.to(device)
-        risk_score_likelihood = softmax(model(image), dim=1)[0][1].item()
+        clinical_info = torch.tensor(
+            [clinical_info["patient_age"], clinical_info["psa"]], dtype=torch.float32
+        ).to(device)
+        risk_score_likelihood = softmax(model(image, clinical_info.view(1, -1)), dim=1)[
+            0
+        ][1].item()
         # our code generates a random probability
         print(image.shape)
         # risk_score_likelihood = random.random()
